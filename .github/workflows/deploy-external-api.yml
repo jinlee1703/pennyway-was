@@ -92,6 +92,39 @@ jobs:
           instance-ids: ${{ secrets.AWS_DEV_INSTANCE_ID }}
           working-directory: /home/ubuntu
           command: |
+            # Docker 및 docker-compose 권한 확인
+            sudo usermod -aG docker ubuntu
+            sudo systemctl restart docker
+            docker --version
+            docker-compose --version
+      
+            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            docker system prune -a -f
+            docker pull pennyway/pennyway-was
+            
+            # 현재 활성 서비스 확인
+            CURRENT_SERVICE=$(docker-compose ps | grep "Up" | grep "was" | awk '{print $1}')
+            echo "Current service: $CURRENT_SERVICE"
+            
+            if [ -z "$CURRENT_SERVICE" ] || [ "$CURRENT_SERVICE" == "was_blue" ]; then
+              NEW_SERVICE="was_green"
+              NEW_PORT="8081"
+            else
+              NEW_SERVICE="was_blue"
+              NEW_PORT="8080"
+            fi
+            echo "New service: $NEW_SERVICE"
+            echo "New port: $NEW_PORT"
+            
+            # VERSION이 비어있으면 'latest'로 설정
+            if [ -z "$VERSION" ]; then
+              VERSION="latest"
+            fi
+            echo "Using version: $VERSION"
+            
+            # docker-compose.yml 파일 업데이트
+            sed -i "s/WAS_VERSION=.*/WAS_VERSION=$VERSION/" .env
+
             # 새 버전 배포
             docker-compose up -d $NEW_SERVICE
             
