@@ -102,7 +102,7 @@ jobs:
             docker system prune -a -f
             docker pull pennyway/pennyway-was
             
-            # 현재 활성 포트 확인 (수정된 부분)
+            # 현재 활성 포트 확인
             CURRENT_PORT=$(docker-compose ps | grep "was" | awk '{print $6}' | cut -d':' -f2 | cut -d'-' -f1)
             echo "Current port: $CURRENT_PORT"
             
@@ -112,6 +112,12 @@ jobs:
               NEW_PORT="8080"
             fi
             echo "New port: $NEW_PORT"
+            
+            # VERSION이 비어있으면 'latest'로 설정
+            if [ -z "$VERSION" ]; then
+              VERSION="latest"
+            fi
+            echo "Using version: $VERSION"
             
             # docker-compose.yml 파일 업데이트
             sed -i "s/WAS_PORT=.*/WAS_PORT=$NEW_PORT/" .env
