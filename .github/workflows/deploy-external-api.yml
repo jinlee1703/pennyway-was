@@ -161,3 +161,8 @@ jobs:
         run: |
           echo "Deployment failed. Please check the logs and take necessary actions."
           exit 1
+
+      - name: Print Outputs
+        run: |
+          echo "Current Service: ${{ steps.ssm.outputs }}"
+
