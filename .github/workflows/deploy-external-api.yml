@@ -105,6 +105,7 @@ jobs:
             # 현재 활성 서비스 확인
             CURRENT_SERVICE=$(docker-compose ps | grep "Up" | grep "was" | awk '{print $1}')
             echo "Current service: $CURRENT_SERVICE"
+            echo "current_service=$CURRENT_SERVICE" >> $GITHUB_OUTPUT
             
             if [ -z "$CURRENT_SERVICE" ] || [ "$CURRENT_SERVICE" == "was_blue" ]; then
               NEW_SERVICE="was_green"
@@ -115,16 +116,19 @@ jobs:
             fi
             echo "New service: $NEW_SERVICE"
             echo "New port: $NEW_PORT"
+            echo "new_service=$NEW_SERVICE" >> $GITHUB_OUTPUT
+            echo "new_port=$NEW_PORT" >> $GITHUB_OUTPUT
             
             # VERSION이 비어있으면 'latest'로 설정
             if [ -z "$VERSION" ]; then
               VERSION="latest"
             fi
             echo "Using version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
             
             # docker-compose.yml 파일 업데이트
             sed -i "s/WAS_VERSION=.*/WAS_VERSION=$VERSION/" .env
-
+      
             # 새 버전 배포
             docker-compose up -d $NEW_SERVICE
             
@@ -143,6 +147,7 @@ jobs:
                 fi
             
                 echo "Deployment successful"
+                echo "deployment_status=success" >> $GITHUB_OUTPUT
                 exit 0
               fi
               echo "Waiting for health check... Attempt $i"
@@ -153,16 +158,21 @@ jobs:
             docker-compose stop $NEW_SERVICE
             docker-compose rm -f $NEW_SERVICE
             echo "Rollback complete. Still running previous version."
+            echo "deployment_status=failed" >> $GITHUB_OUTPUT
             exit 1
-
+      
       # 8. 배포 결과 확인
       - name: Check deployment result
         if: failure()
         run: |
           echo "Deployment failed. Please check the logs and take necessary actions."
           exit 1
-
+      
+      # 9. 출력 결과 확인
       - name: Print Outputs
         run: |
-          echo "Current Service: ${{ steps.ssm.outputs }}"
-
+          echo "Current Service: ${{ steps.ssm.outputs.current_service }}"
+          echo "New Service: ${{ steps.ssm.outputs.new_service }}"
+          echo "New Port: ${{ steps.ssm.outputs.new_port }}"
+          echo "Version: ${{ steps.ssm.outputs.version }}"
+          echo "Deployment Status: ${{ steps.ssm.outputs.deployment_status }}"
