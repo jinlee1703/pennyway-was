@@ -165,23 +165,41 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
             exit 1
 
+            # 결과 설정
+            RESULT="Current Service: $CURRENT_SERVICE
+            New Service: $NEW_SERVICE
+            New Port: $NEW_PORT
+            Version: $VERSION
+            Deployment Status: $([ $? -eq 0 ] && echo 'success' || echo 'failed')"
+            
+            echo "DEPLOYMENT_RESULT<<EOF" >> $GITHUB_OUTPUT
+            echo "$RESULT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
       # 8. 배포 결과 확인 및 출력
       - name: Check and Print Deployment Result
         if: always()
-        shell: bash
         run: |
           echo "Deployment Result:"
           echo "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}"
           
           if [ -z "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" ]; then
             echo "Warning: Deployment result is empty. This might indicate an issue with the SSM command execution."
-          fi
-          
-          if [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: failed"* ]]; then
-            echo "Deployment failed. Please check the logs and take necessary actions."
-            exit 1
-          elif [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: success"* ]]; then
-            echo "Deployment was successful."
           else
-            echo "Deployment status is unclear. Please check the full output above."
+            if [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: failed"* ]]; then
+              echo "Deployment failed. Please check the logs and take necessary actions."
+              exit 1
+            elif [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: success"* ]]; then
+              echo "Deployment was successful."
+            else
+              echo "Deployment status is unclear. Please check the full output above."
+            fi
           fi
+        shell: bash
+
+      - name: Debug SSM Output
+        if: always()
+        run: |
+          echo "SSM Command Output:"
+          echo "${{ toJson(steps.ssm.outputs) }}"
+        shell: bash
