@@ -93,7 +93,6 @@ jobs:
           working-directory: /home/ubuntu
           command: |
             sudo usermod -aG docker ubuntu
-            sudo systemctl restart docker
             docker --version
             docker-compose --version
       
