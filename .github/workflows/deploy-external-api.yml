@@ -92,7 +92,6 @@ jobs:
           instance-ids: ${{ secrets.AWS_DEV_INSTANCE_ID }}
           working-directory: /home/ubuntu
           command: |
-            # Docker 및 docker-compose 권한 확인
             sudo usermod -aG docker ubuntu
             sudo systemctl restart docker
             docker --version
@@ -102,7 +101,6 @@ jobs:
             docker system prune -a -f
             docker pull pennyway/pennyway-was
             
-            # 현재 활성 서비스 확인
             CURRENT_SERVICE=$(docker-compose ps | grep "Up" | grep "was" | awk '{print $1}')
             
             if [ -z "$CURRENT_SERVICE" ] || [ "$CURRENT_SERVICE" == "was_blue" ]; then
@@ -113,93 +111,25 @@ jobs:
               NEW_PORT="8080"
             fi
               
-            # VERSION이 비어있으면 'latest'로 설정
             if [ -z "$VERSION" ]; then
               VERSION="latest"
             fi
             
-            # docker-compose.yml 파일 업데이트
             sed -i "s/WAS_VERSION=.*/WAS_VERSION=$VERSION/" .env
       
-            # 새 버전 배포
             docker-compose up -d $NEW_SERVICE
             
-            # 새 버전 헬스 체크
             for i in {1..30}; do
               if curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEW_PORT/v3/api-docs | grep -q "200"; then
-                echo "New version is healthy"
-            
-                # 트래픽 전환 (여기서는 간단히 표현. 실제로는 로드 밸런서 설정 변경 등이 필요)
-                echo "Switching traffic to new version"
-            
-                # 이전 버전 종료
                 if [ -n "$CURRENT_SERVICE" ] && [ "$CURRENT_SERVICE" != "$NEW_SERVICE" ]; then
                   docker-compose stop $CURRENT_SERVICE
                   docker-compose rm -f $CURRENT_SERVICE
                 fi
-            
-                echo "Deployment successful"
-                echo "DEPLOYMENT_RESULT<<EOF" >> $GITHUB_OUTPUT
-                echo "Current Service: $CURRENT_SERVICE" >> $GITHUB_OUTPUT
-                echo "New Service: $NEW_SERVICE" >> $GITHUB_OUTPUT
-                echo "New Port: $NEW_PORT" >> $GITHUB_OUTPUT
-                echo "Version: $VERSION" >> $GITHUB_OUTPUT
-                echo "Deployment Status: success" >> $GITHUB_OUTPUT
-                echo "EOF" >> $GITHUB_OUTPUT
                 exit 0
               fi
-              echo "Waiting for health check... Attempt $i"
               sleep 10
             done
             
-            echo "New version failed health check. Rolling back."
             docker-compose stop $NEW_SERVICE
             docker-compose rm -f $NEW_SERVICE
-            echo "Rollback complete. Still running previous version."
-            echo "DEPLOYMENT_RESULT<<EOF" >> $GITHUB_OUTPUT
-            echo "Current Service: $CURRENT_SERVICE" >> $GITHUB_OUTPUT
-            echo "New Service: $NEW_SERVICE" >> $GITHUB_OUTPUT
-            echo "New Port: $NEW_PORT" >> $GITHUB_OUTPUT
-            echo "Version: $VERSION" >> $GITHUB_OUTPUT
-            echo "Deployment Status: failed" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
             exit 1
-
-            # 결과 설정
-            RESULT="Current Service: $CURRENT_SERVICE
-            New Service: $NEW_SERVICE
-            New Port: $NEW_PORT
-            Version: $VERSION
-            Deployment Status: $([ $? -eq 0 ] && echo 'success' || echo 'failed')"
-            
-            echo "DEPLOYMENT_RESULT<<EOF" >> $GITHUB_OUTPUT
-            echo "$RESULT" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-
-      # 8. 배포 결과 확인 및 출력
-      - name: Check and Print Deployment Result
-        if: always()
-        run: |
-          echo "Deployment Result:"
-          echo "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}"
-          
-          if [ -z "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" ]; then
-            echo "Warning: Deployment result is empty. This might indicate an issue with the SSM command execution."
-          else
-            if [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: failed"* ]]; then
-              echo "Deployment failed. Please check the logs and take necessary actions."
-              exit 1
-            elif [[ "${{ steps.ssm.outputs.DEPLOYMENT_RESULT }}" == *"Deployment Status: success"* ]]; then
-              echo "Deployment was successful."
-            else
-              echo "Deployment status is unclear. Please check the full output above."
-            fi
-          fi
-        shell: bash
-
-      - name: Debug SSM Output
-        if: always()
-        run: |
-          echo "SSM Command Output:"
-          echo "${{ toJson(steps.ssm.outputs) }}"
-        shell: bash
