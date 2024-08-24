@@ -92,57 +92,8 @@ jobs:
           instance-ids: ${{ secrets.AWS_DEV_INSTANCE_ID }}
           working-directory: /home/ubuntu
           command: |
-            sudo usermod -aG docker ubuntu
-            docker --version
-            docker-compose --version
-      
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
             docker system prune -a -f
             docker pull pennyway/pennyway-was
-            
-            CURRENT_SERVICE=$(docker-compose ps | grep "Up" | grep "was" | awk '{print $1}')
-            
-            if [ -z "$CURRENT_SERVICE" ] || [ "$CURRENT_SERVICE" == "was_blue" ]; then
-              NEW_SERVICE="was_green"
-              NEW_PORT="8081"
-            else
-              NEW_SERVICE="was_blue"
-              NEW_PORT="8080"
-            fi
-              
-            if [ -z "$VERSION" ]; then
-              VERSION="latest"
-            fi
-            
-            sed -i "s/WAS_VERSION=.*/WAS_VERSION=$VERSION/" .env
-      
-            docker-compose up -d $NEW_SERVICE
-            
-            for i in {1..30}; do
-              echo "Attempting health check ($i/30)..."
-              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEW_PORT/v3/api-docs)
-              if [ "$HTTP_STATUS" -eq 200 ]; then
-                echo "Health check passed. New version is healthy."
-                if [ -n "$CURRENT_SERVICE" ] && [ "$CURRENT_SERVICE" != "$NEW_SERVICE" ]; then
-                  echo "Stopping and removing old service: $CURRENT_SERVICE"
-                  docker-compose stop $CURRENT_SERVICE
-                  docker-compose rm -f $CURRENT_SERVICE
-                fi
-                echo "Deployment successful."
-                exit 0
-              else
-                echo "Health check failed. HTTP status: $HTTP_STATUS"
-              fi
-              echo "Waiting 10 seconds before next attempt..."
-              sleep 10
-            done
-            
-            echo "Health check failed after 30 attempts. Rolling back..."
-            docker-compose stop $NEW_SERVICE
-            docker-compose rm -f $NEW_SERVICE
-            if [ -n "$CURRENT_SERVICE" ]; then
-              echo "Ensuring old service is running: $CURRENT_SERVICE"
-              docker-compose up -d $CURRENT_SERVICE
-            fi
-            echo "Rollback complete. Deployment failed."
-            exit 1
+            chmod +x deploy.sh
+            bash -x ./deploy.sh
