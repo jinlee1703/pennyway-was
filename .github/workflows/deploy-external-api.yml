@@ -120,16 +120,30 @@ jobs:
             docker-compose up -d $NEW_SERVICE
             
             for i in {1..30}; do
-              if curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEW_PORT/v3/api-docs | grep -q "200"; then
+              echo "Attempting health check ($i/30)..."
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEW_PORT/v3/api-docs)
+              if [ "$HTTP_STATUS" -eq 200 ]; then
+                echo "Health check passed. New version is healthy."
                 if [ -n "$CURRENT_SERVICE" ] && [ "$CURRENT_SERVICE" != "$NEW_SERVICE" ]; then
+                  echo "Stopping and removing old service: $CURRENT_SERVICE"
                   docker-compose stop $CURRENT_SERVICE
                   docker-compose rm -f $CURRENT_SERVICE
                 fi
+                echo "Deployment successful."
                 exit 0
+              else
+                echo "Health check failed. HTTP status: $HTTP_STATUS"
               fi
+              echo "Waiting 10 seconds before next attempt..."
               sleep 10
             done
             
+            echo "Health check failed after 30 attempts. Rolling back..."
             docker-compose stop $NEW_SERVICE
             docker-compose rm -f $NEW_SERVICE
+            if [ -n "$CURRENT_SERVICE" ]; then
+              echo "Ensuring old service is running: $CURRENT_SERVICE"
+              docker-compose up -d $CURRENT_SERVICE
+            fi
+            echo "Rollback complete. Deployment failed."
             exit 1
